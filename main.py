@@ -6,10 +6,9 @@ import random
 app=Flask(__name__)
 
 baseUrl='base.sern.site'
-imageID='ff0e54cff424'
-innerPort=80
+imageID='703cacf23a52'
+innerPort=8888
 deployPort=5000
-witerList=[]
 
 runOrder='docker run -p {port}:{inPort} --rm -d {ID}'
 stopOrder='docker stop {ID}'
@@ -35,9 +34,11 @@ def reg():
     user=request.args.get("name")
     if not user:# 用户名空
         return render_template("reg.html")
-    passwd=request.args.get("passwd")
+    passwd=request.args.get("passwd").encode('utf-8')
     if user not in userDic.keys(): # 新用户
-        userDic[user]=passwd
+        md5hash = hashlib.md5(passwd)
+        md5 = md5hash.hexdigest()
+        userDic[user]=md5
     else:
         return "用户名冲突"
     return '注册成功, <a href="/"><button type="button">点此登录</button></a>'
@@ -69,10 +70,10 @@ def login():
     if not user:
         return '请输入正确的用户名<meta http-equiv="refresh" content="2;url=/">'
     passwd=request.args.get("passwd").encode('utf-8')
-    if user in userDic.keys() and userDic[user].encode('utf-8')==passwd: 
-            resp = make_response('<h1>登录成功</h1><meta http-equiv="refresh" content="2;url=/">') # 设置cookie
-            md5hash = hashlib.md5(passwd)
-            md5 = md5hash.hexdigest()
+    md5hash = hashlib.md5(passwd)
+    md5 = md5hash.hexdigest()
+    if user in userDic.keys() and userDic[user]==md5: 
+            resp = make_response('<h1>登录成功</h1><meta http-equiv="refresh" content="1;url=/">') # 设置cookie
             resp.set_cookie('username', user)
             resp.set_cookie('userpass',md5)
             return resp
@@ -81,7 +82,7 @@ def login():
 
 
 def doDeply(username): # 部署
-    if username in containerDic.keys():
+    if username in containerDic.keys() :
         port=containerDic[username][1]
         return "你已经部署过靶机了!,请访问: {url}".format(url=baseUrl+':'+str(port))
     choosePort=portList.pop()
@@ -106,12 +107,12 @@ def doDestory(username): # 销毁
 def clear(passcode): # 自动清理
     if clearcode==passcode:
         order='docker ps'
-        ret=os.popen(order).read().split('\n')[1:-3]
+        ret=os.popen(order).read().split('\n')[1:]
         for cont in ret:
-            if 'hour' in cont:
+            if imageID not in cont : # 判断容器是否为目标容器
+                continue
+            if 'hour' in cont: # 容器超时
                 aimID=cont[:12]
-                if aimID in witerList:
-                    continue
                 for user in containerDic:
                     if containerDic[user][0][:12]==aimID:
                         doDestory(user)
@@ -124,7 +125,7 @@ def clear(passcode): # 自动清理
 def remove(passcode): # 全部清理
     if clearcode==passcode:
         order='docker ps'
-        ret=os.popen(order).read().split('\n')[1:-3]
+        ret=os.popen(order).read().split('\n')[1:]
         for cont in ret:
             if imageID in cont:
                 aimID=cont[:12]
@@ -135,13 +136,11 @@ def remove(passcode): # 全部清理
 
 def check(user): # 校验用户cookie是否合法
     if(user in userDic.keys() ):
-        passwd=userDic[user].encode('utf-8')
-        md5hash = hashlib.md5(passwd)
-        md5 = md5hash.hexdigest()
-        if md5==request.cookies.get('userpass'):
+        passwd=userDic[user]
+        if passwd==request.cookies.get('userpass'): # 和用户的哈希校验
             return True
     return False
 
 if __name__ == "__main__":
-    subprocess.Popen(clearOrder.format(port=deployPort,uri='/container/',passcode=clearcode),shell=True)
+    subprocess.Popen(clearOrder.format(port=deployPort,uri='/container/',passcode=clearcode),shell=True)# 拉起清理进程
     app.run(host='0.0.0.0',port=deployPort,debug=0)
