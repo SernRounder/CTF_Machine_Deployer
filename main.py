@@ -28,8 +28,9 @@ containerDic={}
     [containerID,port]
 }
 '''
+############路由#################
 
-@app.route('/register', methods=['GET', 'POST']) # 注册页面
+@app.route('/register', methods=['GET']) # 用户注册页面
 def reg():
     user=request.args.get("name")
     if not user:# 用户名空
@@ -81,28 +82,7 @@ def login():
         return '用户名或密码错误<meta http-equiv="refresh" content="2;url=/">'
 
 
-def doDeply(username): # 部署
-    if username in containerDic.keys() :
-        port=containerDic[username][1]
-        return "你已经部署过靶机了!,请访问: {url}".format(url=baseUrl+':'+str(port))
-    choosePort=portList.pop()
-    turl=baseUrl+':'+str(choosePort)
-    containerSHA=os.popen(runOrder.format(port=choosePort,ID=imageID,inPort=innerPort)).read()
-    containerDic[username]=[containerSHA,choosePort]
-    return render_template("deploy.html",url=turl,info=containerSHA)
-
-def doDestory(username): # 销毁
-    if username not in containerDic.keys():
-        return "你没有正在运行的靶机"
-    else:
-        container=containerDic[username]
-        containerDic.pop(username)
-        id=container[0]
-        port=container[1]
-        os.popen(stopOrder.format(ID=id))
-        portList.add(port)
-        return "销毁成功, 请重新生成靶机"
-        
+##########辅助路由#####################
 @app.route('/container/<passcode>')
 def clear(passcode): # 自动清理
     if clearcode==passcode:
@@ -133,6 +113,30 @@ def remove(passcode): # 全部清理
         return "Done!"
     else:
         return "Fvck you Hacker!!"
+
+
+###########功能函数###################
+def doDeply(username): # 部署
+    if username in containerDic.keys() :
+        port=containerDic[username][1]
+        return "你已经部署过靶机了!,请访问: {url}".format(url=baseUrl+':'+str(port))
+    choosePort=portList.pop()
+    turl=baseUrl+':'+str(choosePort)
+    containerSHA=os.popen(runOrder.format(port=choosePort,ID=imageID,inPort=innerPort)).read()
+    containerDic[username]=[containerSHA,choosePort]
+    return render_template("deploy.html",url=turl,info=containerSHA)
+
+def doDestory(username): # 销毁
+    if username not in containerDic.keys():
+        return "你没有正在运行的靶机"
+    else:
+        container=containerDic[username]
+        containerDic.pop(username)
+        id=container[0]
+        port=container[1]
+        os.popen(stopOrder.format(ID=id))
+        portList.add(port)
+        return "销毁成功, 请重新生成靶机"
 
 def check(user): # 校验用户cookie是否合法
     if(user in userDic.keys() ):
