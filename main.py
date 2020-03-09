@@ -9,14 +9,14 @@ baseUrl='base.sern.site'
 imageID='703cacf23a52'
 innerPort=8888
 deployPort=5000
+startPort=6000
+endPort=6666
 
 runOrder='docker run -p {port}:{inPort} --rm -d {ID}'
-stopOrder='docker stop {ID}'
+stopOrder='docker kill {ID}'
 clearOrder='python /home/rounder/flask/autoDeploy/helper.py {port} {uri} {passcode}'
 
 userDic={}
-startPort=6000
-endPort=6666
 
 clearcode=str(random.random())
 portList=set(i for i in range(startPort,endPort))
@@ -93,10 +93,15 @@ def clear(passcode): # 自动清理
                 continue
             if 'hour' in cont: # 容器超时
                 aimID=cont[:12]
+                cf=0
                 for user in containerDic:
                     if containerDic[user][0][:12]==aimID:
                         doDestory(user)
+                        cf=1
                         break
+                if cf:
+                    print('STOP ERRROR!!, id=',aimID)
+                    stopContainer(aimID)
         return "Done!"
     else:
         return "Fvck you Hacker!!"
@@ -130,13 +135,24 @@ def doDestory(username): # 销毁
     if username not in containerDic.keys():
         return "你没有正在运行的靶机"
     else:
-        container=containerDic[username]
-        containerDic.pop(username)
-        id=container[0]
-        port=container[1]
-        os.popen(stopOrder.format(ID=id))
-        portList.add(port)
+        id=dropUser(username)
+        stopContainer(id)
         return "销毁成功, 请重新生成靶机"
+
+def dropUser(username):# 接受一个username, 将其从containerDIC中移除, 将端口号push回未占用列表, 返回需要free的containerID
+    container=containerDic[username]
+    port=container[1]
+    id=container[0]
+    containerDic.pop(username)
+    portList.add(port)
+    return id
+
+def stopContainer(id):
+    try:
+        os.popen(stopOrder.format(ID=id))
+        return 1
+    except:
+        return 0
 
 def check(user): # 校验用户cookie是否合法
     if(user in userDic.keys() ):
