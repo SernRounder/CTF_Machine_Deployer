@@ -11,12 +11,14 @@ innerPort = 8888
 deployPort = 5000   
 startPort = 6000
 endPort = 6666
+protocol='http://'
 
 runOrder = 'docker run -p {port}:{inPort} --rm -d {ID}'
 stopOrder = 'docker kill {ID}'
-clearOrder = 'python /home/rounder/flask/autoDeploy/helper.py {port} {uri} {passcode}'
+clearOrder = 'python ./helper.py {port} {uri} {passcode}'
 
 userDic = {}
+userIpList = {}
 
 clearcode = str(random.random())
 portList = set(i for i in range(startPort, endPort))
@@ -31,27 +33,31 @@ containerDic = {}
 ############路由#################
 
 
-@app.route('/register', methods=['GET'])  # 用户注册页面
+@app.route('/register')  # 用户注册页面
 def reg():
-    user = request.args.get("name")
-    if not user:  # 用户名空
-        return render_template("reg.html")
-    passwd = request.args.get("passwd").encode('utf-8')
+    ip = request.remote_addr
+    if ip not in userIpList:
+        userIpList[ip]=0
+    elif userIpList[ip]>20:
+        return "当前ip存在主机实例过多, 请稍后再试"
+    userIpList[ip]+=1
+    user=ip+'--'+str(userIpList[ip])
+    passwd = str(random.random()).encode('ascii')
     if user not in userDic.keys():  # 新用户
         md5hash = hashlib.md5(passwd)
         md5 = md5hash.hexdigest()
         userDic[user] = md5
     else:
         return "用户名冲突"
-    return '注册成功, <a href="/"><button type="button">点此登录</button></a>'
+    return '注册成功, <a href="/login?name={}&passwd={}"><button type="button">点此登录</button></a>'.format(user,passwd.decode('ascii'))
 
 
 @app.route("/")  # 根目录
 def root():
     user = request.cookies.get('username')
     if check(user):  # cookies校验通过
-        return render_template("user.html", user=user)
-    return render_template("index.html")  # 登录页面
+        return '<meta http-equiv="refresh" content="0;url=/deploy">'
+    return '<meta http-equiv="refresh" content="0;url=/register">'  # 注册一个新用户
 
 
 @app.route('/deploy')  # 部署验证
@@ -80,12 +86,12 @@ def login():
     md5 = md5hash.hexdigest()
     if user in userDic.keys() and userDic[user] == md5:
         resp = make_response(
-            '<h1>登录成功</h1><meta http-equiv="refresh" content="1;url=/">')  # 设置cookie
+            '<meta http-equiv="refresh" content="0;url=/">')  # 设置cookie
         resp.set_cookie('username', user)
         resp.set_cookie('userpass', md5)
         return resp
     else:
-        return '用户名或密码错误<meta http-equiv="refresh" content="2;url=/">'
+        return '<meta http-equiv="refresh" content="0;url=/">'
 
 
 ##########辅助路由#####################
@@ -103,6 +109,7 @@ def clear(passcode):  # 自动清理
                 for user in containerDic:
                     if containerDic[user][0][:12] == aimID:
                         doDestory(user)
+                        removeUser(user) # 彻底删除用户
                         cf = 1
                         break
                 if cf:
@@ -131,22 +138,25 @@ def remove(passcode):  # 全部清理
 def doDeply(username):  # 部署
     if username in containerDic.keys():
         port = containerDic[username][1]
-        return "你已经部署过靶机了!,请访问: {url}".format(url=baseUrl+':'+str(port))
+        #return "你已经部署过靶机了!,请访问: {url}".format(url=baseUrl+':'+str(port))
+        return '<meta http-equiv="refresh" content="0;url={url}">'.format(url=protocol+baseUrl+':'+str(port)+'/')# 直接跳
     choosePort = portList.pop()
-    turl = baseUrl+':'+str(choosePort)
+    turl = protocol+baseUrl+':'+str(choosePort)+'/'
     containerSHA = os.popen(runOrder.format(
         port=choosePort, ID=imageID, inPort=innerPort)).read()
     containerDic[username] = [containerSHA, choosePort]
-    return render_template("deploy.html", url=turl, info=containerSHA)
+    #return render_template("deploy.html", url=turl, info=containerSHA)
+    return '<meta http-equiv="refresh" content="0;url={url}">'.format(url=turl)
 
 
 def doDestory(username):  # 销毁
     if username not in containerDic.keys():
         return "你没有正在运行的靶机"
     else:
+        removeUser(username)
         id = dropUser(username)
         stopContainer(id)
-        return "销毁成功, 请重新生成靶机"
+        return "销毁成功"
 
 
 def dropUser(username):  # 接受一个username, 将其从containerDIC中移除, 将端口号push回未占用列表, 返回需要free的containerID
@@ -172,6 +182,12 @@ def check(user):  # 校验用户cookie是否合法
         if passwd == request.cookies.get('userpass'):  # 和用户的哈希校验
             return True
     return False
+
+def removeUser(userName): # 彻底删除一个用户
+    userDic.pop(userName)
+    userip=userName[:userName.index('-')]
+    userIpList[userip]-=1
+
 
 
 if __name__ == "__main__":
