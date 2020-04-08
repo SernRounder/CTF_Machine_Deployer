@@ -49,7 +49,8 @@ def reg():
         userDic[user] = md5
     else:
         return "用户名冲突"
-    return '注册成功, <a href="/login?name={}&passwd={}"><button type="button">点此登录</button></a>'.format(user,passwd.decode('ascii'))
+    #return '注册成功, <a href="/login?name={}&passwd={}"><button type="button">点此登录</button></a>'.format(user,passwd.decode('ascii'))
+    return '<meta http-equiv="refresh" content="0;url=/login?name={}&passwd={}">'.format(user,passwd.decode('ascii')) # 直接跳转申请到的账户登录
 
 
 @app.route("/")  # 根目录
