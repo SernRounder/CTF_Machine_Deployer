@@ -1,16 +1,32 @@
 from flask import Flask, render_template, request, make_response
 import hashlib
 import os
+import sys
 import subprocess
 import random
 app = Flask(__name__)
 
+if len(sys.argv)>4:
+
+    data=sys.argv[4].split(':')
+    imageID=data[0]
+    innerPort=data[1]
+    deployPort=int(sys.argv[1])
+    startPort=int(sys.argv[2])
+    endPort=int(sys.argv[3])
+else:
+    print('''
+    Useage: sudo python main.py  DeployPort StartPort EndPort ImageID:InnerPort 
+    ''')
+
+
+
 baseUrl = 'base.sern.site'
-imageID = '703cacf23a52'
-innerPort = 8888
-deployPort = 5000   
-startPort = 6000
-endPort = 6666
+#imageID = 'e5cb55a190fa'
+#innerPort = 8888
+#deployPort = 5000   
+#startPort = 6000
+#endPort = 7000
 protocol='http://'
 
 runOrder = 'docker run -p {port}:{inPort} --rm -d {ID}'
@@ -49,8 +65,8 @@ def reg():
         userDic[user] = md5
     else:
         return "用户名冲突"
-    #return '注册成功, <a href="/login?name={}&passwd={}"><button type="button">点此登录</button></a>'.format(user,passwd.decode('ascii'))
-    return '<meta http-equiv="refresh" content="0;url=/login?name={}&passwd={}">'.format(user,passwd.decode('ascii')) # 直接跳转申请到的账户登录
+   # return '注册成功, <a href="/login?name={}&passwd={}"><button type="button">点此登录</button></a>'.format(user,passwd.decode('ascii'))
+    return '<meta http-equiv="refresh" content="0;url=/login?name={}&passwd={}">'.format(user,passwd.decode('ascii'))
 
 
 @app.route("/")  # 根目录
@@ -164,7 +180,10 @@ def dropUser(username):  # 接受一个username, 将其从containerDIC中移除,
     container = containerDic[username]
     port = container[1]
     id = container[0]
-    containerDic.pop(username)
+    try: # 彻底修复不能正常删除超时docker的bug
+        containerDic.pop(username)
+    except:
+        pass
     portList.add(port)
     return id
 
@@ -185,10 +204,12 @@ def check(user):  # 校验用户cookie是否合法
     return False
 
 def removeUser(userName): # 彻底删除一个用户
-    userDic.pop(userName)
-    userip=userName[:userName.index('-')]
-    userIpList[userip]-=1
-
+    try:
+        userDic.pop(userName)
+        userip=userName[:userName.index('-')]
+        userIpList[userip]-=1
+    except:
+        pass
 
 
 if __name__ == "__main__":
